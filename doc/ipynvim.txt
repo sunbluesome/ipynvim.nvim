@@ -1,0 +1,441 @@
+*ipynvim.txt*  Jupyter Notebook editor for Neovim
+
+Author:  haruki
+License: MIT
+
+==============================================================================
+CONTENTS                                                   *ipynvim-contents*
+
+  1. Introduction ........................... |ipynvim-introduction|
+  2. Requirements ........................... |ipynvim-requirements|
+  3. Dependencies ........................... |ipynvim-dependencies|
+  4. Setup .................................. |ipynvim-setup|
+  5. Configuration .......................... |ipynvim-configuration|
+  6. Commands ............................... |ipynvim-commands|
+  7. Keymaps ................................ |ipynvim-keymaps|
+  8. Buffer Format .......................... |ipynvim-buffer-format|
+  9. Architecture ........................... |ipynvim-architecture|
+  10. Docker / DevContainer ................. |ipynvim-docker|
+  11. API ................................... |ipynvim-api|
+
+==============================================================================
+1. INTRODUCTION                                        *ipynvim-introduction*
+
+ipynvim lets you edit `.ipynb` (Jupyter Notebook) files natively in Neovim.
+Notebooks are rendered as Markdown with `# %%` cell headers and code fences.
+Each cell can be executed via a Jupyter kernel, with streaming output
+displayed as virtual lines below the code.
+
+Key capabilities:
+
+  - Open and save `.ipynb` files directly (no conversion step)
+  - Execute cells via Jupyter kernel with real-time streaming output
+  - Inline image display via Kitty Graphics Protocol
+  - LaTeX math rendering via Typst (requires |mathpng|)
+  - Dual LSP: Python diagnostics for code cells, Markdown for text cells
+  - Cell operations: add, delete, move, and convert cells
+  - Cell-level folding via custom `foldexpr`
+
+==============================================================================
+2. REQUIREMENTS                                        *ipynvim-requirements*
+
+  - Neovim >= 0.10
+  - Python >= 3.13 with `jupyter` (`pip install jupyter`)
+  - A terminal with Kitty Graphics Protocol support (for inline images):
+    Ghostty, Kitty, WezTerm, iTerm2, or cmux
+
+==============================================================================
+3. DEPENDENCIES                                        *ipynvim-dependencies*
+
+Required:
+
+  |luapng|   Kitty Graphics Protocol image display.
+             https://github.com/sunbluesome/luapng
+
+Optional:
+
+  |mathpng|  LaTeX math rendering via Typst.
+             https://github.com/sunbluesome/mathpng
+
+  nvim-cmp   Completion integration.
+             https://github.com/hrsh7th/nvim-cmp
+
+  nvim-treesitter   Syntax highlighting (python, markdown parsers).
+             https://github.com/nvim-treesitter/nvim-treesitter
+
+==============================================================================
+4. SETUP                                                    *ipynvim-setup*
+
+With lazy.nvim: >lua
+
+  {
+    "sunbluesome/ipynvim",
+    dependencies = { "sunbluesome/luapng", "sunbluesome/mathpng" },
+    event = { "BufReadCmd *.ipynb" },
+    opts = {},
+    config = function(_, opts)
+      require("ipynvim").setup(opts)
+    end,
+  }
+<
+
+Python environment ~
+                                                       *ipynvim-python-venv*
+ipynvim needs `jupyter` to execute cells. You can use a dedicated venv: >bash
+
+  cd /path/to/your/project
+  python3 -m venv .venv
+  .venv/bin/pip install jupyter
+<
+
+Then point ipynvim to it: >lua
+
+  require("ipynvim").setup({
+    python_venv = ".venv",  -- relative to cwd, or absolute path
+  })
+<
+
+Relative paths are resolved from Neovim's current working directory,
+so each project can have its own `.venv` with `jupyter` installed.
+
+If `python_venv` is not set, ipynvim uses the system `python3`.
+
+If you share dotfiles between host and Docker, auto-detect: >lua
+
+  require("ipynvim").setup({
+    python_venv = vim.fn.filereadable("/.dockerenv") == 1
+      and nil        -- container: use system python3
+      or ".venv",    -- host: use venv
+  })
+<
+
+==============================================================================
+5. CONFIGURATION                                    *ipynvim-configuration*
+
+                                                          *ipynvim.setup()*
+ipynvim.setup({opts})
+
+  Call this in your config to initialize the plugin. All fields are optional.
+
+  Default values: >lua
+
+    require("ipynvim").setup({
+      max_output_width = 80,
+      max_output_height = 30,
+      latex_font_size = 12,
+      latex_dpi = 150,
+      python_venv = nil,
+      image_display = "inline",
+    })
+<
+
+  Options:
+
+  max_output_width   (number, default: 80)
+    Maximum width in terminal columns for output text rendering.
+
+  max_output_height  (number, default: 30)
+    Maximum height in terminal rows for output rendering.
+
+  latex_font_size    (number, default: 12)
+    Font size in pt for LaTeX math rendering (passed to |mathpng|).
+
+  latex_dpi          (number, default: 150)
+    DPI for LaTeX math rendering (passed to |mathpng|).
+
+  python_venv        (string|nil, default: nil)
+    Path to Python venv directory. Relative paths are resolved from
+    Neovim's current working directory. Absolute paths are used as-is.
+    When nil, the system `python3` is used.
+
+  image_display      (string, default: "inline")
+    Image display mode. "inline" renders images via Kitty Graphics
+    Protocol. "placeholder" shows text-only placeholders.
+
+==============================================================================
+6. COMMANDS                                              *ipynvim-commands*
+
+All commands are available when a `.ipynb` buffer is open.
+
+Navigation ~
+
+                                                       *:IpynvimCellNext*
+:IpynvimCellNext
+  Move cursor to the next cell.
+
+                                                       *:IpynvimCellPrev*
+:IpynvimCellPrev
+  Move cursor to the previous cell.
+
+Cell operations ~
+
+                                                    *:IpynvimAddCodeBelow*
+:IpynvimAddCodeBelow
+  Insert a new code cell below the current cell.
+
+                                                      *:IpynvimAddMdBelow*
+:IpynvimAddMdBelow
+  Insert a new markdown cell below the current cell.
+
+                                                      *:IpynvimDeleteCell*
+:IpynvimDeleteCell
+  Delete the current cell.
+
+                                                         *:IpynvimMoveUp*
+:IpynvimMoveUp
+  Move the current cell up.
+
+                                                       *:IpynvimMoveDown*
+:IpynvimMoveDown
+  Move the current cell down.
+
+                                                         *:IpynvimToCode*
+:IpynvimToCode
+  Convert the current cell to a code cell.
+
+                                                     *:IpynvimToMarkdown*
+:IpynvimToMarkdown
+  Convert the current cell to a markdown cell.
+
+Execution ~
+
+                                                            *:IpynvimRun*
+:IpynvimRun
+  Execute the current code cell. If the kernel is not running, it is
+  started automatically before execution.
+
+                                                         *:IpynvimRunAll*
+:IpynvimRunAll
+  Execute all code cells in order. Starts the kernel automatically
+  if needed.
+
+Kernel management ~
+
+                                                    *:IpynvimKernelStart*
+:IpynvimKernelStart
+  Start the Jupyter kernel.
+
+                                                     *:IpynvimKernelStop*
+:IpynvimKernelStop
+  Stop the Jupyter kernel.
+
+                                                *:IpynvimKernelInterrupt*
+:IpynvimKernelInterrupt
+  Interrupt the currently running execution.
+
+                                                  *:IpynvimKernelRestart*
+:IpynvimKernelRestart
+  Restart the Jupyter kernel.
+
+Output ~
+
+                                                      *:IpynvimViewImage*
+:IpynvimViewImage
+  Open the most recent output image of the current cell in luapng's
+  floating zoom viewer. See |luapng-viewer| for controls.
+
+                                                       *:IpynvimPeekMath*
+:IpynvimPeekMath
+  Peek the math formula under the cursor (requires |mathpng|).
+
+                                                     *:IpynvimYankOutput*
+:IpynvimYankOutput
+  Yank the text output of the current cell to the system clipboard (`+`
+  register).
+
+==============================================================================
+7. KEYMAPS                                                *ipynvim-keymaps*
+
+All keymaps are buffer-local, set automatically when a `.ipynb` file is
+opened.
+
+  Navigation:
+
+    `]]`              Next cell
+    `[[`              Previous cell
+
+  Cell operations:
+
+    `<leader>jo`      Add code cell below
+    `<leader>jm`      Add markdown cell below
+    `<leader>jd`      Delete cell
+    `<leader>jk`      Move cell up
+    `<leader>jj`      Move cell down
+    `<leader>jc`      Convert to code cell
+    `<leader>jM`      Convert to markdown cell
+
+  Execution:
+
+    `<S-CR>`          Run cell (auto-starts kernel)
+    `<leader>jr`      Run cell
+    `<leader>jR`      Run all cells
+
+  Kernel:
+
+    `<leader>js`      Start kernel
+    `<leader>jq`      Stop kernel
+    `<leader>ji`      Interrupt execution
+
+  Output:
+
+    `<leader>jv`      View output image (floating window)
+    `<leader>jp`      Peek math formula
+    `<leader>jy`      Yank cell output
+
+  Folding:
+
+    Standard fold keys (`zc`, `zo`, `za`, `zM`, `zR`, etc.) are wrapped
+    to re-place inline images after fold state changes.
+
+==============================================================================
+8. BUFFER FORMAT                                    *ipynvim-buffer-format*
+
+Each cell is represented in the buffer as: >
+
+  # %% a1b2c3d4 code        <- header (concealed, shows badge)
+  ```python                  <- fence (concealed)
+  print("hello")             <- content
+  ```                        <- fence (concealed)
+                             <- output (virt_lines, not in buffer)
+<
+
+Cell types:
+  - `code`      fenced with ```python
+  - `markdown`  no fences (plain Markdown text)
+  - `raw`       fenced with ```raw
+
+The header line contains an 8-character alphanumeric UUID and the cell
+type. Headers and fences are concealed via extmarks and displayed as
+badges. Line numbers are hidden on structural lines via a custom
+|statuscolumn|.
+
+Output is rendered as |virt_lines| on an extmark placed at the closing
+fence. Virtual lines are read-only and cannot be edited or selected.
+
+==============================================================================
+9. ARCHITECTURE                                      *ipynvim-architecture*
+
+>
+  .ipynb file
+      |
+      v
+  parser.lua  --->  NotebookModel (cells, metadata, kernelspec)
+      |                    |
+      v                    v
+  buffer.lua          serializer.lua  --->  .ipynb file
+      |
+      v
+  Neovim buffer (Markdown + # %% headers + code fences)
+      |
+      +---> extmarks.lua   (cell boundaries, header badges, output areas)
+      +---> lsp.lua        (hidden Python/Markdown buffers for diagnostics)
+      +---> output.lua     (virt_lines rendering, Kitty image placement)
+      +---> cells.lua      (add/delete/move/convert operations)
+      +---> bridge.lua --- bridge.py --- Jupyter kernel
+                (JSON Lines over stdin/stdout)
+<
+
+Bridge protocol ~
+                                                     *ipynvim-bridge*
+ipynvim communicates with the Jupyter kernel via `bridge.py`, a Python
+subprocess using JSON Lines over stdin/stdout: >
+
+  Neovim (Lua)  <--stdin/stdout-->  bridge.py  <--ZMQ-->  Jupyter kernel
+<
+
+Streaming outputs (stdout, images, errors) are delivered via callbacks
+as they arrive from the kernel's IOPub channel.
+
+==============================================================================
+10. DOCKER / DEVCONTAINER                                  *ipynvim-docker*
+
+Kitty Graphics Protocol escape sequences pass through Docker's PTY to the
+host terminal, so inline image display works inside containers.
+
+Image transmission ~
+                                                *ipynvim-direct-transmit*
+Inside containers, the host terminal cannot access container filesystem
+paths. ipynvim automatically detects Docker (`/.dockerenv`) and Podman
+(`/run/.containerenv`) and switches to inline image transmission.
+
+For other container runtimes, set the environment variable: >bash
+
+  export IPYNVIM_DIRECT_TRANSMIT=1
+<
+
+Terminal detection ~
+
+The host terminal must be detected for Kitty Graphics Protocol. Either
+forward `TERM_PROGRAM` from the host, or use luapng's `terminal` config
+option (recommended for containers where env var forwarding is
+unreliable): >lua
+
+  require("luapng").setup({ terminal = "ghostty" })
+<
+
+devcontainer.json ~
+>json
+
+  {
+    "remoteEnv": {
+      "TERM": "${localEnv:TERM}",
+      "TERM_PROGRAM": "${localEnv:TERM_PROGRAM}",
+      "GHOSTTY_RESOURCES_DIR": "${localEnv:GHOSTTY_RESOURCES_DIR}"
+    }
+  }
+<
+
+docker-compose.yml ~
+>yaml
+
+  environment:
+    - TERM=${TERM}
+    - TERM_PROGRAM=${TERM_PROGRAM}
+    - GHOSTTY_RESOURCES_DIR=${GHOSTTY_RESOURCES_DIR}
+<
+
+==============================================================================
+11. API                                                      *ipynvim-api*
+
+Main module: `require("ipynvim")`
+
+ipynvim.setup({opts})            Initialize with configuration.
+ipynvim.open({bufnr}, {path})    Open a .ipynb file into buffer.
+ipynvim.save({bufnr})            Save buffer back to .ipynb file.
+ipynvim.execute_cell()           Execute the cell under cursor.
+ipynvim.execute_all()            Execute all code cells in order.
+ipynvim.goto_next_cell()         Move cursor to next cell.
+ipynvim.goto_prev_cell()         Move cursor to previous cell.
+ipynvim.get_config()             Return active config table.
+ipynvim.get_state({bufnr})       Return per-buffer state.
+ipynvim.foldexpr()               Custom fold expression.
+ipynvim.statuscolumn()           Custom status column.
+
+Cell operations: `require("ipynvim.cells")`
+
+cells.add_cell_below({bufnr}, {type})   Add cell below current.
+cells.delete_cell({bufnr})              Delete current cell.
+cells.move_cell_up({bufnr})             Move cell up.
+cells.move_cell_down({bufnr})           Move cell down.
+cells.change_cell_type({bufnr}, {type}) Convert cell type.
+
+Kernel bridge: `require("ipynvim.bridge")`
+
+bridge.start({opts})             Start the Jupyter kernel.
+bridge.stop()                    Stop the kernel.
+bridge.interrupt()               Interrupt current execution.
+bridge.restart()                 Restart the kernel.
+bridge.is_alive()                Check if kernel is running.
+bridge.execute({code}, ...)      Execute code on the kernel.
+
+Output: `require("ipynvim.output")`
+
+output.render({bufnr}, {range}, {outputs})  Render cell outputs.
+output.clear({bufnr}, {range})              Clear cell output.
+output.clear_all({bufnr})                   Clear all output.
+output.place_images({bufnr}, {opts})        Place inline images.
+output.get_image_paths({uuid})              Get cached image paths.
+output.get_output_texts({uuid})             Get output text lines.
+
+==============================================================================
+ vim:tw=78:ts=8:ft=help:norl:

@@ -1,0 +1,48 @@
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Neovim
+doc/tags
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Lua
+*.luac
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.venv/
+.venv-*/
+
+# IDE / Editor / AI
+.idea/
+.vscode/
+.cursor/
+.cursorignore
+.cursorindexingignore
+.claude/
+CLAUDE.md
+.claudeignore
+*.sublime-project
+*.sublime-workspace
+.project
+.settings/
+
+# Environment / Secrets
+.env
+.env.*
+!.env.example
+
+# Misc
+*.log
+.cache/
