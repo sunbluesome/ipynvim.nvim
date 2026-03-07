@@ -2,6 +2,12 @@
 
 Jupyter Notebook editor for Neovim. Edit `.ipynb` files natively with cell execution, inline image display, and full LSP support.
 
+
+
+https://github.com/user-attachments/assets/0819b670-d258-44ea-b724-228d2fc08235
+
+
+
 ## Features
 
 - **Native `.ipynb` editing** -- Open and save `.ipynb` files directly. Cells are rendered as Markdown with `# %%` headers and code fences.
