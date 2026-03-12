@@ -177,6 +177,15 @@ local function create_hidden_buf(notebook_bufnr, filetype, ext)
   local notebook_path = vim.api.nvim_buf_get_name(notebook_bufnr)
   local notebook_dir = vim.fn.fnamemodify(notebook_path, ":h")
   local buf_name = string.format("%s/.ipynvim_%d%s", notebook_dir, notebook_bufnr, ext)
+
+  -- Evict any orphaned buffer still holding this name.  This can happen when
+  -- BufReadCmd fires a second time (external edit) and LSP state was cleared
+  -- without the hidden buffer being deleted (E95 guard).
+  local orphan = vim.fn.bufnr(buf_name)
+  if orphan ~= -1 then
+    pcall(vim.api.nvim_buf_delete, orphan, { force = true })
+  end
+
   vim.api.nvim_buf_set_name(hidden_bufnr, buf_name)
 
   vim.bo[hidden_bufnr].bufhidden = "wipe"
