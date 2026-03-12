@@ -164,6 +164,20 @@ function M.open(bufnr, filepath)
   -- Normalise to absolute path.
   filepath = vim.fn.fnamemodify(filepath, ":p")
 
+  -- Tear down any existing session for this buffer.
+  -- BufReadCmd re-fires when an external tool modifies the file (e.g. Claude Code,
+  -- :e! reload). Without cleanup the LSP hidden buffers still exist but their
+  -- state entry may have been cleared, causing E95 on the next lsp.create() call.
+  if buf_states[bufnr] and buf_states[bufnr].model then
+    local prev = buf_states[bufnr]
+    if prev.focus_au_id then
+      pcall(vim.api.nvim_del_autocmd, prev.focus_au_id)
+    end
+    require("ipynvim.output").clear_all(bufnr)
+    lsp.destroy(bufnr)
+    drop_state(bufnr)
+  end
+
   -- Parse the notebook file.
   local model, err = parser.parse(filepath)
   if not model then
