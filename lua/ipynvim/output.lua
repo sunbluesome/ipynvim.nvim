@@ -65,10 +65,25 @@ local function strip_ansi(s)
 end
 
 local function truncate(s, max_width)
-  if #s <= max_width then
+  if vim.fn.strdisplaywidth(s) <= max_width then
     return s
   end
-  return s:sub(1, max_width - 3) .. "..."
+  -- Walk character by character so that multi-byte UTF-8 sequences (e.g. box-
+  -- drawing characters like ┬ ╪ which are 3 bytes but 1 display column) are
+  -- never split at a byte boundary, which would produce garbled output (<e2><94>…).
+  local width = 0
+  local char_idx = 0
+  local nchars = vim.fn.strcharlen(s)
+  while char_idx < nchars do
+    local ch = vim.fn.strcharpart(s, char_idx, 1)
+    local cw = vim.fn.strdisplaywidth(ch)
+    if width + cw > max_width - 3 then
+      break
+    end
+    width = width + cw
+    char_idx = char_idx + 1
+  end
+  return vim.fn.strcharpart(s, 0, char_idx) .. "..."
 end
 
 --- Append a single line to virt_chunks and plain_texts.
