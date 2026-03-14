@@ -136,6 +136,14 @@ function M.rebuild(bufnr, model)
         decor_opts.virt_lines = { { { " ", "" } } }
       end
       vim.api.nvim_buf_set_extmark(bufnr, ns_decor, row, 0, decor_opts)
+
+      -- Add a blank virtual line BELOW the separator so that markview table
+      -- borders rendered on the first content line do not visually collide
+      -- with the cell separator badge.
+      vim.api.nvim_buf_set_extmark(bufnr, ns_decor, row, 0, {
+        virt_lines = { { { "", "" } } },
+        virt_lines_above = false,
+      })
     end
   end
 
