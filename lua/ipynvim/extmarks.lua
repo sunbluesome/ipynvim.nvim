@@ -68,11 +68,12 @@ local function build_overlay_virt_text(cell_type, execution_count)
 end
 
 --- Parse a `# %% <id> <type>` header line.
+--- Cell IDs may contain hyphens (e.g. "cell-0-t" from nbformat 4.5 human-readable IDs).
 ---@param line string
 ---@return string|nil id
 ---@return string|nil cell_type
 local function parse_header(line)
-  local id, cell_type = line:match("^# %%%% (%w%w%w%w%w%w%w%w) (%a+)$")
+  local id, cell_type = line:match("^# %%%% ([%w%-]+) (%a+)$")
   return id, cell_type
 end
 

@@ -60,10 +60,12 @@ local function drop_state(bufnr)
 end
 
 --- Check if a line is a cell header (# %% <id> <type>).
+--- Cell IDs may contain hyphens (e.g. "cell-0-t" from nbformat 4.5 human-readable IDs
+--- like "cell-0-title" truncated to 8 chars).
 ---@param line string
 ---@return boolean
 local function is_header(line)
-  return line:match("^# %%%% %w%w%w%w%w%w%w%w %a+$") ~= nil
+  return line:match("^# %%%% [%w%-]+ %a+$") ~= nil
 end
 
 --- Check if a line is a fence (```python, ```raw, ```).
