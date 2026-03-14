@@ -97,6 +97,7 @@ end
 
 local _kitty = nil   ---@type table|false  false = not available
 local _png   = nil   ---@type table|false
+local _protocol_warn_shown = false  -- suppress duplicate inline-image warnings
 
 --- Return luapng.kitty module or nil.
 local function get_kitty()
@@ -292,6 +293,16 @@ local function build_image_chunks(b64_data, cell_range)
     if kitty and kitty.detect_protocol() then
       return build_inline_image(img_path, cell_range)
     end
+    -- Protocol not detected: warn once so the user knows why images are not inline.
+    if not _protocol_warn_shown then
+      _protocol_warn_shown = true
+      vim.notify(string.format(
+        "[ipynvim] Inline image not available (TERM_PROGRAM=%s, TERM=%s)."
+          .. " Set image_display='placeholder' in setup() to suppress.",
+        os.getenv("TERM_PROGRAM") or "(unset)",
+        os.getenv("TERM") or "(unset)"
+      ), vim.log.levels.WARN)
+    end
   end
 
   -- Fallback: text placeholder.
@@ -459,8 +470,10 @@ local function build_chunks_for_one(bufnr, cell_range, output)
       if chunks then
         return chunks, texts
       end
-      return {}, {}
-    elseif data["text/latex"] then
+      -- build_image_chunks failed (e.g. base64 decode error or unsupported terminal).
+      -- Fall through to text/plain fallback below.
+    end
+    if data["text/latex"] then
       local latex = type(data["text/latex"]) == "table"
         and table.concat(data["text/latex"], "")
         or tostring(data["text/latex"])
