@@ -98,6 +98,7 @@ end
 local _kitty = nil   ---@type table|false  false = not available
 local _png   = nil   ---@type table|false
 local _protocol_warn_shown = false  -- suppress duplicate inline-image warnings
+local _tty_diag_shown = false       -- suppress duplicate TTY diagnostic
 
 --- Return luapng.kitty module or nil.
 local function get_kitty()
@@ -647,6 +648,18 @@ function M.place_images(bufnr, opts)
   local kitty = get_kitty()
   if not kitty or not kitty.detect_protocol() then
     return -1
+  end
+
+  -- One-shot diagnostic: warn if the TTY stdout handle is not available.
+  -- This means Kitty sequences cannot be written to the terminal, so images
+  -- will never appear even if the protocol is detected.
+  if not _tty_diag_shown and kitty.is_tty_available and not kitty.is_tty_available() then
+    _tty_diag_shown = true
+    vim.notify(
+      "[ipynvim] luapng: TTY stdout handle is unavailable (uv.new_tty(1) failed)."
+        .. " Inline images will not render. Check that Neovim has a real terminal attached.",
+      vim.log.levels.WARN
+    )
   end
 
   local winid = vim.fn.bufwinid(bufnr)
