@@ -28,6 +28,9 @@ local default_config = {
   python_venv = nil,
   -- Image display mode: "inline" (Kitty Graphics Protocol) or "placeholder" (text only).
   image_display = "inline",
+  -- Image transmit mode: "auto" (detect Docker/container), "direct" (inline base64),
+  -- or "file" (file-based, t=f). Use "direct" if images appear blank in non-Docker.
+  image_transmit = "auto",
 }
 
 --- Active configuration (merged with user opts in setup()).
@@ -138,6 +141,17 @@ function M.setup(opts)
   highlight.setup()
   -- Register markdown treesitter parser for ipynb filetype.
   vim.treesitter.language.register("markdown", "ipynb")
+  -- Apply image_transmit setting to luapng.kitty before any buffer opens.
+  local ok_k, k = pcall(require, "luapng.kitty")
+  if ok_k then
+    local mode = config.image_transmit or "auto"
+    if mode == "direct" then
+      k.set_direct_transmit(true)
+    elseif mode == "file" then
+      k.set_direct_transmit(false)
+    end
+    -- "auto" leaves luapng's own Docker detection in place.
+  end
   -- Register cmp source for LSP completion forwarding.
   local ok_cmp, cmp = pcall(require, "cmp")
   if ok_cmp then
@@ -378,12 +392,36 @@ function M.open(bufnr, filepath)
     end,
   })
 
-  -- Re-place inline images on scroll or resize.
+  -- Re-place inline images on scroll or resize (post-redraw).
   vim.api.nvim_create_autocmd({ "WinScrolled", "VimResized" }, {
     group = augroup,
     buffer = bufnr,
     callback = function()
-      output.place_images(bufnr)
+      vim.schedule(function()
+        if vim.api.nvim_buf_is_valid(bufnr) then
+          output.place_images(bufnr)
+        end
+      end)
+    end,
+  })
+
+  -- Re-place inline images after cursor movement.
+  -- CursorMoved fires after Neovim processes the keystroke; vim.schedule
+  -- defers to after the render pass so images are placed on top of fresh terminal output.
+  local _cursor_place_pending = false
+  vim.api.nvim_create_autocmd("CursorMoved", {
+    group = augroup,
+    buffer = bufnr,
+    callback = function()
+      if not _cursor_place_pending then
+        _cursor_place_pending = true
+        vim.schedule(function()
+          _cursor_place_pending = false
+          if vim.api.nvim_buf_is_valid(bufnr) then
+            output.place_images(bufnr)
+          end
+        end)
+      end
     end,
   })
 
