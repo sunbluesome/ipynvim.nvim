@@ -431,10 +431,22 @@ function M.open(bufnr, filepath)
   -- Place inline images after Neovim finishes rendering the buffer,
   -- then register FocusGained to handle terminal switch recovery.
   -- Retry if screenpos() is not ready yet (returns 0 for all images).
+  -- After Kitty image operations, the terminal may send ACK responses
+  -- (e.g. "\x1b_Gi=1;OK\x1b\\") that Neovim processes as keystrokes.
+  -- The 'i' in the response triggers insert mode; this guard recovers from that.
+  local function ensure_normal_mode()
+    vim.defer_fn(function()
+      if vim.api.nvim_buf_is_valid(bufnr) and vim.fn.mode():sub(1, 1) == "i" then
+        vim.cmd("stopinsert")
+      end
+    end, 80)
+  end
+
   local function try_place_images(attempt)
     if not vim.api.nvim_buf_is_valid(bufnr) then return end
     vim.cmd("redraw")
     local placed = output.place_images(bufnr)
+    ensure_normal_mode()
     if placed == 0 and attempt < 5 then
       vim.defer_fn(function() try_place_images(attempt + 1) end, 100)
       return
@@ -448,6 +460,7 @@ function M.open(bufnr, filepath)
         vim.defer_fn(function()
           if vim.api.nvim_buf_is_valid(bufnr) then
             output.place_images(bufnr, { retransmit = true })
+            ensure_normal_mode()
           end
         end, 50)
       end,
