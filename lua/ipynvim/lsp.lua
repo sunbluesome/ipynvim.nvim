@@ -511,12 +511,17 @@ function M.destroy(notebook_bufnr)
 
   vim.diagnostic.set(ns_diag, notebook_bufnr, {})
 
-  if s.python and vim.api.nvim_buf_is_valid(s.python) then
-    vim.api.nvim_buf_delete(s.python, { force = true })
-  end
-  if s.markdown and vim.api.nvim_buf_is_valid(s.markdown) then
-    vim.api.nvim_buf_delete(s.markdown, { force = true })
-  end
+  -- BufUnload/BufDelete callback cannot call nvim_buf_delete directly (E565)
+  local py_buf = s.python
+  local md_buf = s.markdown
+  vim.schedule(function()
+    if py_buf and vim.api.nvim_buf_is_valid(py_buf) then
+      vim.api.nvim_buf_delete(py_buf, { force = true })
+    end
+    if md_buf and vim.api.nvim_buf_is_valid(md_buf) then
+      vim.api.nvim_buf_delete(md_buf, { force = true })
+    end
+  end)
 end
 
 --- Immediately sync hidden buffers, cancelling any pending debounce.
